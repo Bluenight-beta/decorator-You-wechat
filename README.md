@@ -15,7 +15,7 @@ Enhance notification experience of WeChat with following features:
 
 Extension Pack
 --------------
-[APK download](https://github.com/Nevolution/decorator-wechat/releases/tag/ext)
+[APK download](https://github.com/Bluenight-beta/decorator-You-wechat/releases/tag/test)
 
 No need to install the extension pack if you have Android Auto installed.
 
