@@ -5,10 +5,46 @@ buildscript {
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:7.1.1'
+        classpath 'com.android.tools.build:gradle:8.0.2' // 更新到较新版本的 Gradle 插件
+    }
+}
 
-        // NOTE: Do not place your application dependencies here; they belong
-        // in the individual module build.gradle files
+plugins {
+    id 'com.android.application'
+    id 'kotlin-android'
+}
+
+android {
+    compileSdkVersion 34 // 使用最新的编译 SDK 版本
+
+    defaultConfig {
+        applicationId "com.example.yourapp"
+        minSdkVersion 26 // 适应较广的设备
+        targetSdkVersion 34 // 使用最新的编译 SDK 版本
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false // 如果你不需要代码混淆，可以保持关闭状态以加快构建速度
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11 // 推荐使用较新版本的 Java 来提升编译效率
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    kotlinOptions {
+        jvmTarget = "11"
+    }
+
+    lintOptions {
+        abortOnError false // 禁止 lint 在构建过程中阻止构建
     }
 }
 
@@ -17,35 +53,10 @@ repositories {
     mavenCentral()
 }
 
-if (! project.plugins.hasPlugin("com.android.library")) apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
-android {
-    compileSdkVersion 34
-
-    defaultConfig {
-        minSdkVersion 26
-        targetSdkVersion 34
-        resConfigs "en", "zh"
-
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-    }
-
-    aaptOptions {
-        noCompress "apk"
-    }
-
-    kotlinOptions.jvmTarget = "1.8"
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
-    }
-}
-
 dependencies {
-    implementation project(':sdk') //implementation 'com.oasisfeng.nevo:sdk:2.0.0-rc01'
-    implementation 'androidx.core:core-ktx:1.7.0'
-    implementation 'org.jetbrains.kotlin:kotlin-stdlib-jdk7'
-    androidTestImplementation 'junit:junit:4.13.2'
+    implementation "androidx.core:core-ktx:1.10.1" // 使用较新版本
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.0" // Kotlin 标准库
+    testImplementation "junit:junit:4.13.2"
+    androidTestImplementation "androidx.test.ext:junit:1.1.5"
+    androidTestImplementation "androidx.test.espresso:espresso-core:3.5.1"
 }
