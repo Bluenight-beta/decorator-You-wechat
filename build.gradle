@@ -5,13 +5,8 @@ buildscript {
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.0.2' // 更新到较新版本的 Gradle 插件
+        classpath 'com.android.tools.build:gradle:8.6.0' // 更新到较新版本的 Gradle 插件
     }
-}
-
-plugins {
-    id 'com.android.application'
-    id 'kotlin-android'
 }
 
 android {
