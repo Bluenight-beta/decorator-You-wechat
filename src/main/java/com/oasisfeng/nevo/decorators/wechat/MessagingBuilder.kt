@@ -20,6 +20,8 @@ import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.PendingIntent.FLAG_IMMUTABLE
+import android.app.PendingIntent.FLAG_UPDATE_CURRENT
 import android.app.RemoteInput
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -27,8 +29,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build.VERSION.SDK_INT
-import android.os.Build.VERSION_CODES.N
-import android.os.Build.VERSION_CODES.O
 import android.os.Build.VERSION_CODES.P
 import android.os.Bundle
 import android.os.Process
@@ -44,10 +44,9 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 import com.oasisfeng.nevo.decorators.wechat.ConversationManager.Conversation
 import com.oasisfeng.nevo.sdk.MutableStatusBarNotification
-import java.util.*
 
 /**
- * Build the modernized [MessagingStyle] for WeChat conversation.
+ * Build the modernized [MessagingStyle][NotificationCompat.MessagingStyle] for WeChat conversation.
  *
  * Refactored by Oasis on 2018-8-9.
  */
@@ -125,7 +124,7 @@ internal class MessagingBuilder(private val mContext: Context, private val mCont
         if (onRead != null) mMarkReadPendingIntents[sbn.key] = onRead // Mapped by evolved key,
         val messages = buildMessages(conversation)
         val remoteInput = ext.remoteInput
-        if (SDK_INT >= N && onReply != null && remoteInput != null && conversation.isChat()) {
+        if (onReply != null && remoteInput != null && conversation.isChat()) {
             val inputHistory = n.extras.getCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY)
             val proxy = proxyDirectReply(conversation.nid, sbn, onReply, remoteInput, inputHistory)
             val replyRemoteInput = RemoteInput.Builder(remoteInput.resultKey).addExtras(remoteInput.extras)
@@ -154,9 +153,9 @@ internal class MessagingBuilder(private val mContext: Context, private val mCont
             .putExtra(EXTRA_REPLY_ACTION, onReply).putExtra(EXTRA_RESULT_KEY, remoteInput.resultKey)
             .putExtra(EXTRA_ORIGINAL_KEY, sbn.originalKey).putExtra(EXTRA_CONVERSATION_ID, cid)
             .putExtra(Intent.EXTRA_USER, sbn.user)
-        if (SDK_INT >= N && inputHistory != null)
+        if (inputHistory != null)
             proxy.putCharSequenceArrayListExtra(Notification.EXTRA_REMOTE_INPUT_HISTORY, arrayListOf(*inputHistory))
-        return PendingIntent.getBroadcast(mContext, 0, proxy.setPackage(mContext.packageName), PendingIntent.FLAG_UPDATE_CURRENT)
+        return PendingIntent.getBroadcast(mContext, 0, proxy.setPackage(mContext.packageName), FLAG_UPDATE_CURRENT or FLAG_IMMUTABLE)
     }
 
     private val mReplyReceiver: BroadcastReceiver = object : BroadcastReceiver() { override fun onReceive(context: Context, proxy: Intent) {
@@ -182,22 +181,20 @@ internal class MessagingBuilder(private val mContext: Context, private val mCont
             RemoteInput.addResultsToIntent(arrayOf(RemoteInput.Builder(resultKey).build()), proxy, results)
         } ?: input
 
-        val history = if (SDK_INT >= N) proxy.getCharSequenceArrayListExtra(Notification.EXTRA_REMOTE_INPUT_HISTORY) else null
+        val history = proxy.getCharSequenceArrayListExtra(Notification.EXTRA_REMOTE_INPUT_HISTORY)
         try {
             val inputData = addTargetPackageAndWakeUp(replyAction)
             inputData.clipData = proxy.clipData
             replyAction.send(mContext, 0, inputData, PendingIntent.OnFinished { pendingIntent: PendingIntent, intent: Intent, _: Int, _: String?, _: Bundle? ->
                 if (BuildConfig.DEBUG) Log.d(TAG, "Reply sent: " + intent.toUri(0))
-                if (SDK_INT >= N) {
-                    val addition = Bundle()
-                    val inputs: Array<CharSequence>
-                    val toCurrentUser = Process.myUserHandle() == pendingIntent.creatorUserHandle
-                    inputs = if (toCurrentUser && context.packageManager.queryBroadcastReceivers(intent, 0).isEmpty())
-                        arrayOf(context.getString(R.string.wechat_with_no_reply_receiver))
-                    else history?.apply { add(0, text)  }?.toTypedArray() ?: arrayOf(text)
-                    addition.putCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY, inputs)
-                    mController.recastNotification(originalKey ?: key, addition)
-                }
+                val addition = Bundle()
+                val inputs: Array<CharSequence>
+                val toCurrentUser = Process.myUserHandle() == pendingIntent.creatorUserHandle
+                inputs = if (toCurrentUser && context.packageManager.queryBroadcastReceivers(intent, 0).isEmpty())
+                    arrayOf(context.getString(R.string.wechat_with_no_reply_receiver))
+                else history?.apply { add(0, text)  }?.toTypedArray() ?: arrayOf(text)
+                addition.putCharSequenceArray(Notification.EXTRA_REMOTE_INPUT_HISTORY, inputs)
+                mController.recastNotification(originalKey ?: key, addition)
                 markRead(key)
             }, null)
         } catch (e: PendingIntent.CanceledException) {
@@ -219,7 +216,7 @@ internal class MessagingBuilder(private val mContext: Context, private val mCont
     }
 
     fun close() {
-        try { mContext.unregisterReceiver(mReplyReceiver) } catch (e: RuntimeException) {}
+        try { mContext.unregisterReceiver(mReplyReceiver) } catch (_: RuntimeException) {}
     }
 
     init {
@@ -251,25 +248,22 @@ internal class MessagingBuilder(private val mContext: Context, private val mCont
             val bigText = StringBuilder().append(convs.summary).append("\nT:").append(convs.ticker)
             val messages = if (convs.ext != null) convs.ext!!.messages else null
             if (messages != null) for (msg in messages) bigText.append("\n").append(msg)
-            val n = Notification.Builder(context).setSmallIcon(android.R.drawable.stat_sys_warning)
+            val n = Notification.Builder(context, "Debug").setSmallIcon(android.R.drawable.stat_sys_warning)
                 .setContentTitle(convs.id).setContentText(convs.ticker).setSubText(summary).setShowWhen(true)
                 .setStyle(Notification.BigTextStyle().setBigContentTitle(convs.title).bigText(bigText.toString()))
-            if (SDK_INT >= O) n.setChannelId("Debug")
             context.getSystemService(NotificationManager::class.java)
                 .notify(if (convs.id != null) convs.id.hashCode() else convs.title.hashCode(), n.build())
         }
 
         private fun buildMessage(conversation: Conversation, `when`: Long, ticker: CharSequence?, text: CharSequence,
-                                 sender: String?): NotificationCompat.MessagingStyle.Message {
-            var sender = sender
+                                 senderArg: String?): NotificationCompat.MessagingStyle.Message {
+            var sender = senderArg
             var actualText: CharSequence? = text
             if (sender == null) {
                 sender = text.extractSenderFromText()
                 if (sender != null) {
-                    actualText =
-                        text.subSequence(sender.length + SENDER_MESSAGE_SEPARATOR.length, text.length)
-                    if (TextUtils.equals(conversation.title, sender)) sender =
-                        null // In this case, the actual sender is user itself.
+                    actualText = text.subSequence(sender.length + SENDER_MESSAGE_SEPARATOR.length, text.length)
+                    if (conversation.title == sender) sender = null // In this case, the actual sender is user itself.
                 }
             }
             actualText = EmojiTranslator.translate(actualText)
@@ -319,10 +313,8 @@ internal class MessagingBuilder(private val mContext: Context, private val mCont
 
         fun flatIntoExtras(messaging: NotificationCompat.MessagingStyle, extras: Bundle) {
             val user = messaging.user
-            if (user != null) {
-                extras.putCharSequence(NotificationCompat.EXTRA_SELF_DISPLAY_NAME, user.name)
-                if (SDK_INT >= P) extras.putParcelable(Notification.EXTRA_MESSAGING_PERSON, user.toNative()) // Not included in NotificationCompat
-            }
+            extras.putCharSequence(NotificationCompat.EXTRA_SELF_DISPLAY_NAME, user.name)
+            if (SDK_INT >= P) extras.putParcelable(Notification.EXTRA_MESSAGING_PERSON, user.toNative()) // Not included in NotificationCompat
             if (messaging.conversationTitle != null)
                 extras.putCharSequence(NotificationCompat.EXTRA_CONVERSATION_TITLE, messaging.conversationTitle)
             val messages = messaging.messages
@@ -344,7 +336,7 @@ internal class MessagingBuilder(private val mContext: Context, private val mCont
             }
             if (message.dataMimeType != null) putString(KEY_DATA_MIME_TYPE, message.dataMimeType)
             if (message.dataUri != null) putParcelable(KEY_DATA_URI, message.dataUri)
-            if (SDK_INT >= O && !message.extras.isEmpty) putBundle(KEY_EXTRAS_BUNDLE, message.extras)
+            if (! message.extras.isEmpty) putBundle(KEY_EXTRAS_BUNDLE, message.extras)
             //if (message.isRemoteInputHistory()) putBoolean(KEY_REMOTE_INPUT_HISTORY, message.isRemoteInputHistory());
         }
 
